@@ -19,19 +19,16 @@ from stretch.core import get_parameters
 from stretch.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
 from stretch.perception import create_semantic_sensor
 from stretch.utils.logger import Logger
-from stretch.app.speech_to_text import speech_to_text
 from termcolor import colored
+from stretch.agent.base import ManagedOperation
 import time
 import gc
 import torch
-import sounddevice as sd
+import stretch.core.status as status
+from stretch.motion import HelloStretchIdx
 import numpy as np
-import scipy.io.wavfile as wav
-import os
-
 
 logger = Logger(__name__)
-
 
 @click.command()
 @click.option("--robot_ip", default="", help="IP address of the robot")
@@ -130,12 +127,6 @@ logger = Logger(__name__)
 )
 
 
-# def get_object_and_receptacle(use_llm, use_voice, prompt, llm):
-
-    
-
-#     return llm_response
-
 
 def main(
     robot_ip: str = "192.168.1.15",
@@ -161,113 +152,90 @@ def main(
     # Get Parameters
     parameters = get_parameters(parameter_file)
 
-
-    # Use LLM for pick and place before creating robot object
-
-    # Prompt defines the type of LLM model
-    prompt = PickupPromptBuilder()
-
-    # Getting object and receptacle
-    # llm_response = get_object_and_receptacle(use_llm, use_voice, prompt, llm)
-
-    # edge case for voice
-    if use_voice and not use_llm:
-        logger.warning("Voice input is only supported with a language model.")
-        logger.warning(
-            "Please set --use-llm to use voice input. For now, we will disable voice input."
-        )
-        use_voice = False
-
-    # Using llm 
-    llm_client = None
-    if use_llm:
-        if use_voice:
-            whisper = speech_to_text()
-            audio = whisper.record_audio()
-            input_text = whisper.speech_to_text(audio)
-        else:
-            input_text = input(colored("You: ", "green"))
-        llm_client = get_llm_client(llm, prompt=prompt)
-        assistant_response = llm_client(input_text)
-        llm_response = prompt.parse_response(assistant_response)
-    # not using llm
-    else:
-        if len(target_object) == 0:
-            target_object = input("Enter the target object: ")
-        if len(receptacle) == 0:
-            receptacle = input("Enter the target receptacle: ")
-        llm_response = [("pickup", target_object), ("place", receptacle)]
-
-    # debugging
-    print(llm_response)
-
-    if llm_client is not None:
-        del llm_client
-        gc.collect()  # Force garbage collection
-        torch.cuda.empty_cache()  # Clear unused memory
-    llm_client = None
-    time.sleep(2)
-
-
     # Create robot
     robot = HomeRobotZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,
     )
-    # Create prediction model
-    robot.say_sync("Let's start the pick and place demo !")
-    time.sleep(0.5)
-    robot.say_sync("Initializing sensors.")
-    semantic_sensor = create_semantic_sensor(
-        parameters=parameters,
-        device_id=device_id,
-        verbose=verbose,
-    )
-
-    # Agents wrap the robot high level planning interface for now
-    agent = RobotAgent(robot, parameters, semantic_sensor, enable_realtime_updates=realtime)
-    print("Starting robot agent: initializing...")
-    agent.start(visualize_map_at_start=show_intermediate_maps)
-    if reset:
-        print("Reset: moving robot to origin")
-        agent.move_closed_loop([0, 0, 0], max_time=60.0)
-
-    if radius is not None and radius > 0:
-        print("Setting allowed radius to:", radius)
-        agent.set_allowed_radius(radius)
-
-    # Load a PKL file from a previous run and process it
-    # This will use ICP to match current observations to the previous ones
-    # ANd then update the map with the new observations
-    if input_path is not None and len(input_path) > 0:
-        print("Loading map from:", input_path)
-        agent.load_map(input_path)
-
-    robot.say_sync("Sensors Initialized")
-
-    # Executor handles outputs from the LLM client and converts them into executable actions
-    executor = PickupExecutor(
-        robot, agent, available_actions=prompt.get_available_actions(), dry_run=False
-    )
-
-    # Parse things and listen to the user
-
-    ok = True
-    agent.reset()
-    say_this = None
-    ok = executor(llm_response)
 
 
-    # Debugging code
-    # debug_response = [('say', '"I am picking up the bottle and placing it on the table."'), ('pickup', 'bottle'), ('place', 'table')]
-    # debug_response = [('say', '"I am picking up the bottle and giving it to you."'), ('pickup', 'bottle'), ('hand_over', '')]
-    # debug_response = [('say', '"I am picking up the bottle and giving it to you."'), ('pickup', 'bottle')]
+    robot.move_to_manip_posture
+    obs = robot.get_observation()
+    joint_state = obs.joint
+    model = robot.get_robot_model()
 
-    # ok = executor(debug_response)
+    pitch_from_vertical = 0.5
+
+    joint_state[HelloStretchIdx.LIFT] = -0.3
+
+    # Strip out fields from the full robot state to only get the 6dof manipulator state
+    # TODO: we should probably handle this in the zmq wrapper.
+    # arm_cmd = conversions.config_to_manip_command(joint_state)
+    robot.switch_to_manipulation_mode()
+    robot.arm_to(joint_state, blocking=True)
+
+
+
+
+
+
+
+    # # Create prediction model
+    # semantic_sensor = create_semantic_sensor(
+    #     parameters=parameters,
+    #     device_id=device_id,
+    #     verbose=verbose,
+    # )
+
+    # # Agents wrap the robot high level planning interface for now
+    # agent = RobotAgent(robot, parameters, semantic_sensor, enable_realtime_updates=realtime)
+    # print("Starting robot agent: initializing...")
+    # agent.start(visualize_map_at_start=show_intermediate_maps)
+
+    # testing_perception = TestPerception("go to navigation mode", agent, retry_on_failure=True)
+    # if (testing_perception.can_start()):
+    #     testing_perception.run()
+
+    # if (testing_perception.was_successful()):
+    #     print("Success")
+
+    # exit_Text = input(colored("You: ", "green"))
+    # # Parse things and listen to the user
+    # ok = True
+    # # while robot.running and ok:
+    # #     ok = True
 
     robot.stop()
-    os.system("pkill rerun") 
+
+
+class TestPerception(ManagedOperation):
+
+    def can_start(self) -> bool:
+        self.attempt("will switch to navigation mode.")
+        return True
+
+    def run(self) -> None:
+        """Search for a receptacle on the floor."""
+
+        # Update world map
+        self.intro("Searching for a receptacle on the floor.")
+        self.set_status(status.RUNNING)
+
+        # Must move to nav before we can do anything
+        self.robot.move_to_nav_posture()
+        # Now update the world
+        self.update()
+
+        print(f"So far we have found: {len(self.agent.get_voxel_map().instances)} objects.")
+
+    def was_successful(self) -> bool:
+        res = self.robot.in_navigation_mode()
+        if res:
+            self.cheer("Robot is in navigation mode.")
+        else:
+            self.error("Robot is still not in navigation mode.")
+        return res
 
 
 if __name__ == "__main__":

@@ -14,9 +14,12 @@ from stretch.agent.operations import (
     GraspObjectOperation,
     NavigateToObjectOperation,
     OpenLoopGraspObjectOperation,
+    GoToOperation,
     PreGraspObjectOperation,
     RotateInPlaceOperation,
     SearchForObjectOnFloorOperation,
+    GoToStart,
+    GoHomeOperation
 )
 from stretch.agent.robot_agent import RobotAgent
 from stretch.core.task import Operation, Task
@@ -115,6 +118,11 @@ class PickObjectTask:
             to_receptacle=False,
         )
 
+        # print(f"Robot BASE location : {self.robot.get_base_pose()[:2]}")
+        # print(f"Robot full location : {self.robot.get_base_pose()}")
+        location = self.robot.get_base_pose()
+        go_to_start = GoToStart(name="GoToStart", agent=self.agent, location = location)
+
         # When about to start, run object detection and try to find the object. If not in front of us, explore again.
         # If we cannot find the object, we should go back to the search_for_object operation.
         # To determine if we can start, we just check to see if there's a detectable object nearby.
@@ -159,6 +167,7 @@ class PickObjectTask:
             task.add_operation(rotate_in_place)
         task.add_operation(search_for_object)
         task.add_operation(go_to_object)
+        task.add_operation(go_to_start)
         task.add_operation(pregrasp_object)
         task.add_operation(grasp_object)
 
@@ -173,10 +182,14 @@ class PickObjectTask:
         task.connect_on_success(search_for_object.name, go_to_object.name)
         task.connect_on_success(go_to_object.name, pregrasp_object.name)
         task.connect_on_success(pregrasp_object.name, grasp_object.name)
+        # task.connect_on_success(go_to_start.name, search_for_object.name)
 
         # On failure try to search again
-        task.connect_on_failure(pregrasp_object.name, search_for_object.name)
-        task.connect_on_failure(grasp_object.name, search_for_object.name)
+        # task.connect_on_failure(pregrasp_object.name, search_for_object.name)
+        # task.connect_on_failure(grasp_object.name, search_for_object.name)
+        task.connect_on_failure(pregrasp_object.name, go_to_start.name)
+        task.connect_on_failure(grasp_object.name, go_to_start.name)
+        task.connect_on_failure(search_for_object.name, go_to_start.name)
 
         # Add failures
         if add_rotate:
@@ -188,6 +201,7 @@ class PickObjectTask:
 
         # Terminate the task on successful grasp
         task.terminate_on_success(grasp_object.name)
+        task.terminate_on_success(go_to_start.name)
 
         return task
 

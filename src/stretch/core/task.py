@@ -122,6 +122,7 @@ class Task:
         self._terminal_operations: List[Operation] = []
         self._operations: Dict[str, Operation] = dict()
         self.max_failures = max_failures
+        self.previous_operation = None
 
     def add_operation(self, operation, terminal: bool = False):
         """Add this operation into the task.
@@ -198,6 +199,7 @@ class Task:
         if self.current_operation is None:
             raise ValueError("No initial operation set.")
         failures = 0
+        i = 0
         while self.current_operation is not None:
             if self.current_operation.can_start():
                 self.info(f"Starting operation {self.current_operation.name}")
@@ -207,6 +209,7 @@ class Task:
                 if self.current_operation.was_successful():
                     # Transition if we were successful
                     self.info(f"Operation {self.current_operation.name} successful.")
+                    self.previous_operation = self.current_operation.name
                     self.current_operation = self.current_operation.on_success
                     if self.current_operation is None:
                         self.info("Task completed successfully!")
@@ -216,6 +219,7 @@ class Task:
                 else:
                     # And if we failed
                     self.info(f"Operation {self.current_operation.name} failed.")
+                    self.previous_operation = self.current_operation.name
                     self.current_operation = self.current_operation.on_failure
                     failures += 1
                     if self.current_operation is None:

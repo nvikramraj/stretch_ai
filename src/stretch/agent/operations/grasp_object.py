@@ -86,7 +86,8 @@ class GraspObjectOperation(ManagedOperation):
     # ------------------------
     # Grasping motion planning parameters and offsets
     # This is the distance at which we close the gripper when visual servoing
-    median_distance_when_grasping: float = 0.18
+    # median_distance_when_grasping: float = 0.18
+    median_distance_when_grasping: float = 0.19
     lift_min_height: float = 0.1
     lift_max_height: float = 1.0
 

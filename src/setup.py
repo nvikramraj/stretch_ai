@@ -42,7 +42,7 @@ setuptools.setup(
         "matplotlib",
         "trimesh>=3.10.0",
         "yacs",
-        "scikit-image>=0.21.0",
+        "scikit-image",
         "sophuspy",
         "pin",  # Pinocchio IK solver
         "pynput",
@@ -60,7 +60,7 @@ setuptools.setup(
         "pyrealsense2",
         "urchin",
         # Visualization
-        "rerun-sdk>=0.18.0",
+        "rerun-sdk",
         # For siglip encoder
         "sentencepiece",
         # For git tools

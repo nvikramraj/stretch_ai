@@ -192,6 +192,7 @@ class UpdateOperation(ManagedOperation):
                     self.agent.current_object = instance
                     dist_to_object = dist
             else:
+                self.agent.current_object = None
                 self.warn(f" - Found an object of class {name} but could not reach it.")
 
     def was_successful(self):

@@ -15,6 +15,10 @@ from stretch.agent.operations import (
     OpenGripper,
     SpeakOperation,
     UpdateOperation,
+    SearchForReceptacleOperation,
+    GoToNavOperation,
+    RotateInPlaceOperation,
+    SearchForObjectOnFloorOperation
 )
 from stretch.agent.robot_agent import RobotAgent
 from stretch.core.task import Task
@@ -89,6 +93,45 @@ class HandOverTask:
             to_receptacle=False,
         )
 
+
+        # To debug finding person
+        go_to_navigation_mode = GoToNavOperation(
+            "go to navigation mode", self.agent, retry_on_failure=True
+        )
+
+        if add_rotate:
+            # Spin in place to find objects.
+            rotate_in_place = RotateInPlaceOperation(
+                "rotate_in_place", self.agent, parent=go_to_navigation_mode
+            )
+        search_for_receptacle = SearchForReceptacleOperation(
+            name=f"search_for_{self.target_object}",
+            agent=self.agent,
+            parent=rotate_in_place if add_rotate else go_to_navigation_mode,
+            retry_on_failure=True,
+            match_method="class",
+        )
+
+        search_for_object = SearchForObjectOnFloorOperation(
+            name=f"search_for_{self.target_object}_on_floor",
+            agent=self.agent,
+            retry_on_failure=True,
+            match_method="class",
+            require_receptacle=False,
+        )
+
+        search_for_object.set_target_object_class(self.target_object)
+
+
+        not_found_a_person = SpeakOperation(
+            name="not_found_a_person", agent=self.agent, parent=update, on_cannot_start=update
+        )
+        not_found_a_person.configure(
+            message="Could not find a person or navigation failed, attempting scanning again !", sleep_time=2.0
+        )
+
+        ###############33
+
         ready_to_extend_arm = SpeakOperation(
             name="ready_to_extend_arm",
             agent=self.agent,
@@ -140,18 +183,50 @@ class HandOverTask:
         )
         retract_arm.configure(arm_extension=0.05)
 
-        # task.add_operation(go_to_navigation_mode)
-        # if add_rotate:
-        #    task.add_operation(rotate_in_place)
         task.add_operation(update)
         task.add_operation(found_a_person)
         task.add_operation(go_to_object)
+        task.add_operation(not_found_a_person)
+
+        task.add_operation(go_to_navigation_mode)
+        if add_rotate:
+           task.add_operation(rotate_in_place)
+        task.add_operation(search_for_object)
+
         task.add_operation(ready_to_extend_arm)
         task.add_operation(extend_arm)
         task.add_operation(ready_to_open_gripper)
         task.add_operation(open_gripper)
         task.add_operation(finished_handover)
         task.add_operation(retract_arm)
+
+
+        task.connect_on_success(update.name, found_a_person.name)
+
+        # Incase of failure search for person again !
+        task.connect_on_failure(update.name,not_found_a_person.name)
+        task.connect_on_success(not_found_a_person.name,go_to_navigation_mode.name)
+        task.connect_on_success(go_to_navigation_mode.name, rotate_in_place.name)
+        task.connect_on_success(rotate_in_place.name, search_for_object.name)
+        task.connect_on_success(search_for_object.name, found_a_person.name)
+
+
+        # If found a person go to person
+        task.connect_on_success(found_a_person.name, go_to_object.name)
+
+
+        # Debug code
+        # task.terminate_on_success(go_to_object.name)
+
+        # Handover task
+        task.connect_on_success(go_to_object.name, ready_to_extend_arm.name)
+        task.connect_on_success(ready_to_extend_arm.name, extend_arm.name)
+        task.connect_on_success(extend_arm.name, ready_to_open_gripper.name)
+        task.connect_on_success(ready_to_open_gripper.name, open_gripper.name)
+        task.connect_on_success(open_gripper.name, finished_handover.name)
+        task.connect_on_success(finished_handover.name, retract_arm.name)
+        task.terminate_on_success(retract_arm.name)
+        
 
         # Terminate on a successful place
         return task

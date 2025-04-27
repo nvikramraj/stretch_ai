@@ -37,11 +37,14 @@ class NavigateToObjectOperation(ManagedOperation):
             f"{self.name}: check to see if object is reachable (receptacle={self.to_receptacle})."
         )
         self.plan = None
+        print(self.get_target())
         if self.get_target() is None:
             self.error("no target!")
             return False
 
         start = self.robot.get_base_pose()
+        print(f"BASE POSE: {start} ")
+        print(self.navigation_space.is_valid(start))
         if not self.navigation_space.is_valid(start):
             self.error(
                 "Robot is in an invalid configuration. It is probably too close to geometry, or localization has failed."

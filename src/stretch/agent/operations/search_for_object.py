@@ -94,6 +94,8 @@ class ManagedSearchOperation(ManagedOperation):
 
     def is_name_match(self, name: str) -> bool:
         """Check if the name of the object is a match for the target object class. By default, we check if the object class is in the name of the object."""
+        # print(f"Object class = {self.object_class}")
+        # print(f"name = {self.name}")
         return self.object_class in name
 
 
@@ -234,6 +236,7 @@ class SearchForObjectOnFloorOperation(ManagedSearchOperation):
         return self.agent.current_receptacle is not None
 
     def run(self) -> None:
+
         self.intro("Find a reachable object on the floor.")
         self._successful = False
 
@@ -318,19 +321,22 @@ class SearchForObjectOnFloorOperation(ManagedSearchOperation):
 
         # Check to see if there is a visitable frontier
         if self.agent.current_object is None:
-            self.warn(f"No {self.object_class} found. Moving to frontier.")
-            # Find a point on the frontier and move there
-            res = self.agent.plan_to_frontier(start=start)
-            if res.success:
-                self.robot.execute_trajectory(
-                    [node.state for node in res.trajectory], final_timeout=10.0
-                )
-            # Update world model once we get to frontier
-            self.update()
+            # self.warn(f"No {self.object_class} found. Moving to frontier.")
+            # # Find a point on the frontier and move there
+            # res = self.agent.plan_to_frontier(start=start)
+            # if res.success:
+            #     self.robot.execute_trajectory(
+            #         [node.state for node in res.trajectory], final_timeout=10.0
+            #     )
+            # # Update world model once we get to frontier
+            # self.update()
 
-            # If we moved to the frontier, then and only then can we clean up the object plans.
-            self.warn("Resetting object plans.")
-            self.agent.reset_object_plans()
+            # # If we moved to the frontier, then and only then can we clean up the object plans.
+            # self.warn("Resetting object plans.")
+            # self.agent.reset_object_plans()
+            if self.talk:
+                self.agent.robot_say(f"I could not find a {self.sayable_object_class} that I can reach!")
+                time.sleep(self.talk_t)
         else:
             self.cheer(f"Found object of {self.object_class}!")
             if self.talk:

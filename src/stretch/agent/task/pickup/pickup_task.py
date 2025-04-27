@@ -20,6 +20,7 @@ from stretch.agent.operations import (
     RotateInPlaceOperation,
     SearchForObjectOnFloorOperation,
     SearchForReceptacleOperation,
+    GoToStart
 )
 from stretch.agent.robot_agent import RobotAgent
 from stretch.core.task import Operation, Task
@@ -149,6 +150,9 @@ class PickupTask:
             to_receptacle=True,
         )
 
+        location = self.robot.get_base_pose()
+        go_to_start = GoToStart(name="GoToStart", agent=self.agent, location = location)
+
         # When about to start, run object detection and try to find the object. If not in front of us, explore again.
         # If we cannot find the object, we should go back to the search_for_object operation.
         # To determine if we can start, we just check to see if there's a detectable object nearby.
@@ -200,6 +204,7 @@ class PickupTask:
         task.add_operation(search_for_receptacle)
         task.add_operation(search_for_object)
         task.add_operation(go_to_object)
+        task.add_operation(go_to_start)
         task.add_operation(pregrasp_object)
         task.add_operation(grasp_object)
         task.add_operation(go_to_receptacle)
@@ -210,20 +215,34 @@ class PickupTask:
         else:
             task.connect_on_success(go_to_navigation_mode.name, rotate_in_place.name)
             task.connect_on_success(rotate_in_place.name, search_for_receptacle.name)
+
         task.connect_on_success(search_for_receptacle.name, search_for_object.name)
         task.connect_on_success(search_for_object.name, go_to_object.name)
         task.connect_on_success(go_to_object.name, pregrasp_object.name)
         task.connect_on_success(pregrasp_object.name, grasp_object.name)
+
+        # On Failures
+        task.connect_on_failure(search_for_receptacle.name, go_to_start.name)
+        task.connect_on_failure(search_for_object.name, go_to_start.name)
+        task.connect_on_failure(pregrasp_object.name, go_to_start.name)
+        task.connect_on_failure(grasp_object.name, go_to_start.name)
+        
+        
+
         task.connect_on_success(grasp_object.name, go_to_receptacle.name)
         task.connect_on_success(go_to_receptacle.name, place_object_on_receptacle.name)
-        task.terminate_on_success(place_object_on_receptacle.name)
+        # task.connect_on_success(place_object_on_receptacle.name, go_to_start.name)
 
-        task.connect_on_success(search_for_receptacle.name, search_for_object.name)
 
-        task.connect_on_cannot_start(go_to_object.name, search_for_object.name)
+        # Debug
+        # task.connect_on_cannot_start(go_to_object.name, search_for_object.name)
         # task.connect_on_cannot_start(go_to_receptacle.name, search_for_receptacle.name)
 
         # Terminate on a successful place
         task.terminate_on_success(place_object_on_receptacle.name)
+        # task.terminate_on_success(grasp_object.name)
+        # task.terminate_on_success(pregrasp_object.name)
+        task.terminate_on_success(go_to_start.name)
+        # task.terminate_on_success(search_for_object.name)
 
         return task

@@ -33,4 +33,5 @@ from .search_for_object import SearchForObjectOnFloorOperation, SearchForRecepta
 from .speak import SpeakOperation
 from .switch_mode import GoToNavOperation
 from .update import UpdateOperation
+from .navigate_to_start import GoToStart
 from .utility_operations import SetCurrentObjectOperation, SetCurrentReceptacleOperation

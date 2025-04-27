@@ -906,6 +906,7 @@ class RobotAgent:
             if self.semantic_sensor is not None:
                 # Semantic prediction
                 obs = self.semantic_sensor.predict(obs)
+                print(obs)
 
             t2 = timeit.default_timer()
             self.get_voxel_map().add_obs(obs)

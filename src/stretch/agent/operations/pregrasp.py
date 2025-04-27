@@ -83,6 +83,12 @@ class PreGraspObjectOperation(ManagedOperation):
 
         # Joint state goal
         joint_state[HelloStretchIdx.WRIST_PITCH] = -np.pi / 2 + pitch_from_vertical
+        if(object_xyz[2] > 0.5):
+            joint_state[HelloStretchIdx.LIFT] = 1.0
+        print(f"Object XYZ = {object_xyz}")
+        print(f"dy = {dy}")
+        print(f"dz = {dz}")
+        print(f"pitch_from_vertical = {pitch_from_vertical}")
 
         # Strip out fields from the full robot state to only get the 6dof manipulator state
         # TODO: we should probably handle this in the zmq wrapper.

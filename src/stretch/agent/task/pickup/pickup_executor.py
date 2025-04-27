@@ -37,7 +37,8 @@ class PickupExecutor:
         self,
         robot: AbstractRobotClient,
         agent: RobotAgent,
-        match_method: str = "feature",
+        # match_method: str = "feature",
+        match_method: str = "class",
         open_loop: bool = False,
         dry_run: bool = False,
         available_actions: List[str] = None,
@@ -80,8 +81,8 @@ class PickupExecutor:
         """
 
         if target_receptacle is None or len(target_receptacle) == 0:
-            self._pick_only(target_object)
-            return
+            success = self._pick_only(target_object)
+            return success
 
         logger.alert(f"[Pickup task] Pickup: {target_object} Place: {target_receptacle}")
 
@@ -102,6 +103,9 @@ class PickupExecutor:
 
         # Execute the task
         task.run()
+        # if (task.previous_operation == "GoToStart"):
+        #     return False
+        return True
 
     def _take_picture(self, channel=None) -> None:
         """Take a picture with the head camera. Optionally send it to Discord."""
@@ -158,7 +162,10 @@ class PickupExecutor:
 
         # Execute the task
         task.run()
-
+        if (task.previous_operation == "GoToStart"):
+            return False
+        return True
+        
     def _place(self, target_receptacle: str) -> None:
         """Create a task to place the object and execute it.
 
@@ -215,7 +222,7 @@ class PickupExecutor:
         # After the robot has started...
         try:
             hand_over_task = HandOverTask(self.agent)
-            task = hand_over_task.get_task()
+            task = hand_over_task.get_task(add_rotate = True)
         except Exception as e:
             print(f"Error creating task: {e}")
             self.robot.stop()
@@ -247,6 +254,7 @@ class PickupExecutor:
         # Loop over every command we have been given
         # Pull out pickup and place as a single arg if they are in a row
         # Else, execute things as they come
+        pickup_success = True
         while i < len(response):
             command, args = response[i]
             logger.info(f"Command: {i} {command} {args}")
@@ -262,6 +270,9 @@ class PickupExecutor:
                     self.discord_bot.send_message(channel=channel, message=args)
                 self.agent.robot_say(args)
             elif command == "pickup":
+                # Debug code
+                # i += 1
+                # continue
                 logger.info(f"[Pickup task] Pickup: {args}")
                 target_object = args
                 i += 1
@@ -269,7 +280,7 @@ class PickupExecutor:
                     logger.warning(
                         "Pickup without place! Try giving a full pick-and-place instruction."
                     )
-                    self._pickup(target_object, None)
+                    pickup_success = self._pickup(target_object, None)
                     # Continue works here because we've already incremented i
                     continue
                 next_command, next_args = response[i]
@@ -277,21 +288,28 @@ class PickupExecutor:
                     logger.warning(
                         "Pickup without place! Try giving a full pick-and-place instruction."
                     )
-                    self._pickup(target_object, None)
+                    pickup_success= self._pickup(target_object, None)
                     # Continue works here because we've already incremented i
                     continue
                 else:
                     logger.info(f"{i} {next_command} {next_args}")
                     logger.info(f"[Pickup task] Place: {next_args}")
                 target_receptacle = next_args
-                self._pickup(target_object, target_receptacle)
+                pickup_success = self._pickup(target_object, target_receptacle)
             elif command == "place":
                 logger.warning(
                     "Place without pickup! Try giving a full pick-and-place instruction."
                 )
                 self._place(args)
             elif command == "hand_over":
-                self._hand_over()
+                # Adding for debugging
+                if(pickup_success):
+                    self._hand_over()
+                else:
+                    self.agent.robot_say(f"I was unable to pick up the {target_object}.")
+                    self.emote_task.get_task("shake_head").run()
+                    self.emote_task.get_task("avert_gaze").run()
+                
             elif command == "take_picture":
                 self._take_picture(channel)
             elif command == "take_ee_picture":

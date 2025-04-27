@@ -24,7 +24,7 @@ class PlaceObjectOperation(ManagedOperation):
     """Place an object on top of the target receptacle, by just using the arm for now."""
 
     lift_distance: float = 0.2
-    place_height_margin: float = 0.1
+    place_height_margin: float = 0.2 # 0.1
     show_place_in_voxel_grid: bool = False
     place_step_size: float = 0.35
     use_pitch_from_vertical: bool = True
@@ -41,7 +41,7 @@ class PlaceObjectOperation(ManagedOperation):
     def configure(
         self,
         lift_distance: float = 0.2,
-        place_height_margin: float = 0.1,
+        place_height_margin: float = 0.2,# 0.1,
         show_place_in_voxel_grid: bool = False,
         place_step_size: float = 0.25,
         use_pitch_from_vertical: bool = True,
@@ -165,6 +165,19 @@ class PlaceObjectOperation(ManagedOperation):
         self.robot.move_to_manip_posture()
         self.robot.switch_to_manipulation_mode()
 
+        # moving the arm up so it does not hit anything
+        xyt = self.robot.get_base_pose()
+        placement_xyz = self.sample_placement_position(xyt)
+        print(f"Receptacle XYZ = {placement_xyz}")
+        if(placement_xyz[2] > 0.8):
+            joint_state[HelloStretchIdx.LIFT] = 1.0
+        elif(placement_xyz[2] < 0):
+            joint_state[HelloStretchIdx.LIFT] = 0.5
+        else:
+            joint_state[HelloStretchIdx.LIFT] = placement_xyz[2] + 0.15
+
+        self.robot.arm_to(joint_state, blocking=True)
+
         # Get object xyz coords
         xyt = self.robot.get_base_pose()
         placement_xyz = self.sample_placement_position(xyt)
@@ -186,6 +199,7 @@ class PlaceObjectOperation(ManagedOperation):
 
         # Joint compute a joitn state goal and associated ee pos/rot
         joint_state[HelloStretchIdx.WRIST_PITCH] = -np.pi / 2 + pitch_from_vertical
+        # joint_state[HelloStretchIdx.LIFT] = 
         self.robot.arm_to(joint_state)
         ee_pos, ee_rot = model.manip_fk(joint_state)
 
@@ -216,6 +230,11 @@ class PlaceObjectOperation(ManagedOperation):
         self.robot.switch_to_manipulation_mode()
         self.robot.arm_to(target_joint_positions, blocking=True)
         time.sleep(0.5)
+
+        # Move down a bit
+        target_joint_positions_lifted = target_joint_positions.copy()
+        target_joint_positions_lifted[HelloStretchIdx.LIFT] -= 0.05
+        self.robot.arm_to(target_joint_positions_lifted, blocking=True)
 
         # Open the gripper
         self.robot.open_gripper(blocking=True)
